@@ -248,11 +248,16 @@ def cmd_bench(cfg: config.Config, a: argparse.Namespace, log) -> int:
 def cmd_boot_hook(cfg: config.Config, a: argparse.Namespace, log) -> int:
     """Back in Arch: disarm the relay and keep a copy of what Windows reported."""
     boot.clear_bootnext()
+    # Retry: on 2026-11-17 the unit ran at boot before the LAN answered (even after
+    # network-online.target) and left the relay armed. 18 x 10 s covers a slow DHCP.
     session = None
-    try:
-        session = relay.call(cfg, "POST", "/disarm", {}).get("session")
-    except relay.RelayError as exc:
-        log(f"relay: {exc}")
+    for attempt in range(18):
+        try:
+            session = relay.call(cfg, "POST", "/disarm", {}).get("session")
+            break
+        except relay.RelayError as exc:
+            log(f"relay (attempt {attempt + 1}): {exc}")
+            time.sleep(10)
     d = _report_dir(cfg)
     marker = config.STATE_DIR / "last-archived"
     started = ""

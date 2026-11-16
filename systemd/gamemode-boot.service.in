@@ -9,7 +9,7 @@ RequiresMountsFor=@WINDOWS_MOUNT@
 Type=oneshot
 User=@USER@
 ExecStart=@TOOL@/.venv/bin/gaming boot-hook
-TimeoutStartSec=120
+TimeoutStartSec=300
 
 [Install]
 WantedBy=multi-user.target
