@@ -101,6 +101,11 @@ def registry_values(cfg: Config, ccs: str) -> dict[str, list[Value]]:
         Value(f"{ccs}\\Control\\Session Manager\\Power", "HiberbootEnabled", REG_DWORD, dword(0)),
         Value(f"{ccs}\\Control\\Power", "HibernateEnabled", REG_DWORD, dword(0)),
         Value(fw, "gamemode-sshd-offline", REG_SZ, sz(rule)),
+        # Arch keeps the RTC in UTC; Windows by default writes local time to it,
+        # so Arch booted an hour off after the first Windows stint (measured
+        # 2026-11-16: journal started at 22:45 for 23:45 CET until NTP caught up).
+        Value(f"{ccs}\\Control\\TimeZoneInformation", "RealTimeIsUniversal",
+              hive.REG_QWORD, hive.qword(1)),
     ]
     # A Defender path exclusion for the service binary only: an unsigned Go
     # binary running as SYSTEM is exactly what heuristics like to quarantine,
@@ -181,9 +186,14 @@ def plant_files(cfg: Config, log: Callable[[str], None], reset_tasks: list[str])
     for sub in ("bin", "tasks", "reports", "dl", "secrets"):
         (gm / sub).mkdir(parents=True, exist_ok=True)
     _copy_if_changed(build_service(log), gm / "bin/gamemoded.exe", log)
-    for t in sorted((REPO / "windows/tasks").glob("*.ps1")):
+    wanted = sorted((REPO / "windows/tasks").glob("*.ps1"))
+    for t in wanted:
         if _copy_if_changed(t, gm / "tasks" / t.name, log):
             reset_tasks.append(t.stem)  # a changed task runs again
+    for stale in (gm / "tasks").glob("*.ps1"):
+        if stale.name not in {t.name for t in wanted}:
+            stale.unlink()
+            log(f"  removed stale task {stale.name}")
     for name in reset_tasks:
         for ext in (".json", ".log"):
             (gm / "reports" / f"task-{name}{ext}").unlink(missing_ok=True)

@@ -63,6 +63,15 @@ def _build_parser() -> argparse.ArgumentParser:
     un = sub.add_parser("unprepare", help="remove the service and C:\\gamemode from Windows "
                         "(Apollo stays installed)")
     un.add_argument("--yes", action="store_true", help="do not ask")
+    pr = sub.add_parser("pair", help="(laptop) pair Moonlight with Apollo, no clicking")
+    pr.add_argument("--wait", type=int, default=0, help="seconds to wait for archserver to appear")
+    be = sub.add_parser("bench", help="(laptop) stream for a while and measure latency and bitrate")
+    be.add_argument("--seconds", type=int, default=60)
+    be.add_argument("--app", default="Desktop")
+    be.add_argument("--bitrate", type=int, default=40000, help="kbit/s requested")
+    be.add_argument("--resolution", default="1920x1080")
+    be.add_argument("--fps", type=int, default=60)
+    be.add_argument("--wait", type=int, default=0, help="seconds to wait for archserver to appear")
     sub.add_parser("boot-hook", help="run at Linux boot: disarm relay, archive reports")
     rd = sub.add_parser("relay-deploy", help="install or update the relay on pigion")
     rd.add_argument("--remove", action="store_true", help="uninstall it instead")
@@ -212,6 +221,30 @@ def cmd_unprepare(cfg: config.Config, a: argparse.Namespace, log) -> int:
     return 0
 
 
+def cmd_pair(cfg: config.Config, a: argparse.Namespace, log) -> int:
+    from . import client
+
+    try:
+        client.pair(cfg, client.find_server(cfg, a.wait, log), log)
+    except client.ClientError as exc:
+        log(f"gaming: {exc}")
+        return 1
+    return 0
+
+
+def cmd_bench(cfg: config.Config, a: argparse.Namespace, log) -> int:
+    from . import client
+
+    try:
+        client.find_server(cfg, a.wait, log)
+        r = client.bench(cfg, a.seconds, a.app, a.bitrate, a.resolution, a.fps, log)
+    except client.ClientError as exc:
+        log(f"gaming: {exc}")
+        return 1
+    print(json.dumps(r, indent=2))
+    return 0
+
+
 def cmd_boot_hook(cfg: config.Config, a: argparse.Namespace, log) -> int:
     """Back in Arch: disarm the relay and keep a copy of what Windows reported."""
     boot.clear_bootnext()
@@ -300,5 +333,6 @@ systemctl --user is-active gamemode-relay.service
 
 COMMANDS = {
     "on": cmd_on, "off": cmd_off, "status": cmd_status, "report": cmd_report,
-    "prepare": cmd_prepare, "unprepare": cmd_unprepare, "boot-hook": cmd_boot_hook, "relay-deploy": cmd_relay_deploy,
+    "prepare": cmd_prepare, "unprepare": cmd_unprepare, "boot-hook": cmd_boot_hook,
+    "pair": cmd_pair, "bench": cmd_bench, "relay-deploy": cmd_relay_deploy,
 }

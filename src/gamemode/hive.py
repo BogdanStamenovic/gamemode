@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-REG_SZ, REG_EXPAND_SZ, REG_BINARY, REG_DWORD, REG_MULTI_SZ = 1, 2, 3, 4, 7
+REG_SZ, REG_EXPAND_SZ, REG_BINARY, REG_DWORD, REG_MULTI_SZ, REG_QWORD = 1, 2, 3, 4, 7, 11
 
 VENDOR = Path(__file__).resolve().parents[2] / "vendor" / "hivex" / "usr" / "lib"
 
@@ -81,6 +81,10 @@ def multi_sz(items: Iterable[str]) -> bytes:
 
 def dword(n: int) -> bytes:
     return struct.pack("<I", n)
+
+
+def qword(n: int) -> bytes:
+    return struct.pack("<Q", n)
 
 
 @dataclass
@@ -174,6 +178,8 @@ def _show(v: Value) -> str:
         return repr(v.data.decode("utf-16-le").rstrip("\0"))
     if v.type == REG_DWORD:
         return str(struct.unpack("<I", v.data)[0])
+    if v.type == REG_QWORD:
+        return str(struct.unpack("<Q", v.data)[0])
     if v.type == REG_MULTI_SZ:
         return repr([s for s in v.data.decode("utf-16-le").split("\0") if s])
     return v.data.hex()

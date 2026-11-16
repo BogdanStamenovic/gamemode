@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "gamemode"
-version = "0.1.0"
+version = "0.1.1"
 description = "Switch archserver into Windows for game streaming and back, headlessly."
 readme = "README.md"
 requires-python = ">=3.11"

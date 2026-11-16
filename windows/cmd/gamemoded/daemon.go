@@ -265,7 +265,9 @@ func runTasks(ctx context.Context, cfg Config, report func()) {
 		}
 		name := strings.TrimSuffix(filepath.Base(f), ".ps1")
 		resPath := filepath.Join(reportsDir, "task-"+name+".json")
-		if _, err := os.Stat(resPath); err == nil {
+		// NN-name.always.ps1 runs on every boot (e.g. re-locking ACLs on files
+		// Linux dropped in since); everything else runs once.
+		if _, err := os.Stat(resPath); err == nil && !strings.HasSuffix(name, ".always") {
 			continue
 		}
 		event("task %s: start", name)
