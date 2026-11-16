@@ -8,3 +8,4 @@ vendor/
 .vendor/
 .cache/
 *.egg-info/
+uv.lock

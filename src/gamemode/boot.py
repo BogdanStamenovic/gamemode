@@ -80,11 +80,11 @@ def sleep_agents(self_name: str | None, log: Callable[[str], None]) -> None:
     names = [n for n, s in agents() if s == "idle" and n != self_name and not n.startswith("hotline-")]
     if not names:
         return
-    args = ["hotline", "--sleep"]
+    # One call per agent: `hotline --sleep` takes a single NAME [never|now]
+    # (passing five at once returned rc=2 and slept nobody, 2026-11-17).
     for n in names:
-        args += [n, "now"]
-    r = _run(args, timeout=120)
-    log(f"hotline --sleep {' '.join(names)}: rc={r.returncode} {r.stderr.strip()[:300]}")
+        r = _run(["hotline", "--sleep", n, "now"], timeout=60)
+        log(f"hotline --sleep {n} now: rc={r.returncode} {r.stderr.strip()[:200]}")
 
 
 def write_mode(cfg: Config, mode: str, deadline: int | None = None) -> None:
