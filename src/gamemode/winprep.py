@@ -186,7 +186,12 @@ def plant_files(cfg: Config, log: Callable[[str], None], reset_tasks: list[str])
     for sub in ("bin", "tasks", "reports", "dl", "secrets"):
         (gm / sub).mkdir(parents=True, exist_ok=True)
     _copy_if_changed(build_service(log), gm / "bin/gamemoded.exe", log)
-    wanted = sorted((REPO / "windows/tasks").glob("*.ps1"))
+    # Repo tasks plus local ones (~/.config/gamemode/tasks): one-off jobs that
+    # belong to this machine, not to the tool (e.g. a cleaning run).
+    from .config import config_dir
+
+    wanted = sorted([*(REPO / "windows/tasks").glob("*.ps1"), *(config_dir() / "tasks").glob("*.ps1")],
+                    key=lambda t: t.name)
     for t in wanted:
         if _copy_if_changed(t, gm / "tasks" / t.name, log):
             reset_tasks.append(t.stem)  # a changed task runs again

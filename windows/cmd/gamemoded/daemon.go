@@ -272,7 +272,7 @@ func runTasks(ctx context.Context, cfg Config, report func()) {
 		}
 		event("task %s: start", name)
 		t0 := time.Now()
-		tctx, cancel := context.WithTimeout(ctx, time.Duration(cfg.TaskTimeout)*time.Minute)
+		tctx, cancel := context.WithTimeout(ctx, time.Duration(taskTimeout(f, cfg.TaskTimeout))*time.Minute)
 		cmd := exec.CommandContext(tctx, "powershell.exe", "-NoProfile", "-NonInteractive",
 			"-ExecutionPolicy", "Bypass", "-File", f)
 		cmd.Dir = root
@@ -360,4 +360,22 @@ func localServer(ctx context.Context, cfg Config, restart chan<- string) {
 	srv := &http.Server{Handler: mux}
 	go func() { <-ctx.Done(); srv.Close() }()
 	srv.Serve(ln)
+}
+
+// taskTimeout reads an optional "# gamemode-timeout: N" (minutes) header from
+// the first lines of a task, for the few that legitimately take long (a
+// Defender scan); everything else gets the configured default.
+func taskTimeout(path string, def int) int {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return def
+	}
+	lines := strings.SplitN(string(b), "\n", 6)
+	for _, l := range lines {
+		var n int
+		if _, err := fmt.Sscanf(strings.TrimSpace(l), "# gamemode-timeout: %d", &n); err == nil && n > 0 {
+			return n
+		}
+	}
+	return def
 }
