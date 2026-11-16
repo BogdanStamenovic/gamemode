@@ -1,0 +1,15 @@
+# Rendered by scripts/install-unit.sh; edit this template.
+[Unit]
+Description=gamemode boot hook (back in Arch: disarm the relay, archive Windows reports)
+Wants=network-online.target
+After=network-online.target
+RequiresMountsFor=@WINDOWS_MOUNT@
+
+[Service]
+Type=oneshot
+User=@USER@
+ExecStart=@TOOL@/.venv/bin/gaming boot-hook
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target
