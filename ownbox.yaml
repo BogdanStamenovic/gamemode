@@ -5,30 +5,13 @@ homepage: https://github.com/BogdanStamenovic/gamemode
 tags: [cli, gaming, dual-boot, moonlight, windows, python, go]
 install:
   platforms: [linux]
-  # Full lifecycle, nothing to run by hand afterwards:
-  #  - venv + CLI, vendored hivex, Apollo installer, cross-compiled Windows service
-  #  - the relay on pigion (user service), the boot hook on archserver (system unit)
-  #  - if Windows was prepared before, re-plant updated files there
-  #    (registry is only written when a value differs, with a backup first).
-  setup:
-    - uv venv -q --allow-existing --python /usr/bin/python3 .venv
-    - uv pip install -q -e . --python .venv/bin/python
-    - scripts/fetch-deps.sh
-    - scripts/build-service.sh
-    - .venv/bin/gaming relay-deploy
-    - scripts/install-unit.sh
-    - '[ -d /mnt/windows/gamemode ] && .venv/bin/gaming prepare || echo "Windows not prepared yet: run gaming prepare" >&2'
-  update:
-    - uv pip install -q -e . --python .venv/bin/python
-    - scripts/fetch-deps.sh
-    - scripts/build-service.sh
-    - .venv/bin/gaming relay-deploy
-    - scripts/install-unit.sh
-    - '[ -d /mnt/windows/gamemode ] && .venv/bin/gaming prepare || true'
-  remove:
-    - scripts/install-unit.sh --remove
-    - .venv/bin/gaming relay-deploy --remove
-    # Taking the service out of Windows writes the registry: asked on a TTY, skipped without one.
-    - 'if [ -t 0 ] && [ -d /mnt/windows/gamemode ]; then .venv/bin/gaming unprepare; else echo "kept the Windows side; run gaming unprepare --yes to remove it" >&2; fi'
+  # Full lifecycle, role-aware (see scripts/lifecycle.sh): on archserver it is
+  # venv + CLI, vendored hivex, Apollo installer, the Windows service, the relay
+  # on pigion, the boot hook, and re-planting Windows files if prepared before
+  # (registry only rewritten when a value differs, with a backup first).
+  # On the laptop it is the CLI plus Apollo credentials copied from archserver.
+  setup: [scripts/lifecycle.sh setup]
+  update: [scripts/lifecycle.sh update]
+  remove: [scripts/lifecycle.sh remove]
 commands:
   gaming: .venv/bin/gaming
