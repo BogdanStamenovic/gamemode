@@ -145,6 +145,13 @@ and on a terminal asks before taking the service out of Windows (`gaming unprepa
 
 Then, once: `gaming prepare`.
 
+On the laptop the same `ownbox install gamemode` takes the client role (no Windows partition there):
+the CLI, plus Apollo's web credentials copied from archserver over SSH.
+
+Machine-specific one-off tasks (a cleaning run, say) go in `~/.config/gamemode/tasks/` and are planted
+with the repo's tasks; a task can raise its own time cap with `# gamemode-timeout: N` in its first lines.
+Tasks named `*.always.ps1` run on every boot.
+
 Requirements: Go (to build the service), `uv`, `efibootmgr`, passwordless `sudo` for
 `efibootmgr --bootnext` and `systemctl reboot`, SSH to pigion, the Windows partition mounted
 read-write (ntfs3) with no hibernation file.
@@ -165,26 +172,50 @@ Config: `~/.config/gamemode/config.toml` (created on first run), secrets in
 | `gaming unprepare [--yes]` | Take the service, rule, exclusion, keys and `C:\gamemode` back out. |
 | `gaming relay-deploy [--remove]` | Install/update the relay on pigion. |
 | `gaming boot-hook` | What the boot unit runs. |
+| `gaming pair [--wait S]` | (laptop) Pair Moonlight with Apollo: Moonlight's `--pin` plus Apollo's `/api/pin`, no typing. |
+| `gaming bench [--seconds N] [--wait S]` | (laptop) Stream N s and record Moonlight's stats, ping under load and received bitrate. |
 
 Exit codes: 0 success, 1 failure, 2 usage error or refused (busy, aborted).
 
+## Measured
+
+From the first real cycles on 2026-11-16/17 (archserver: RTX 4060, wired 1 GbE; laptop: Iris Xe on
+5 GHz Wi-Fi at -69 dBm, Wi-Fi power saving off).
+
+| What | Number |
+|---|---|
+| Prep boot, `gaming on --prep` to back in Arch, 6 tasks | 3.5 min (23:41:49 → 23:45:18) |
+| Windows boot to first service heartbeat | ~30 s |
+| Relay found by MAC from Windows | first try |
+| Moonlight average network latency (1080p60, Desktop) | 3 ms, variance 1 ms |
+| Frames dropped by the network / by jitter | 0.00% / 0.09% |
+| Host processing (capture + NVENC) avg / min / max | 3.7 / 1.9 / 224 ms (max during a Defender scan) |
+| Laptop decode / render time | 4.37 ms (software decode) / 1.53 ms |
+| LAN ping server → laptop, 300 pings, Wi-Fi power save off | avg 3.2 ms, max 9.8 ms, 0 over 10 ms |
+| Same with Wi-Fi power save on | avg 4.1 ms, 21/300 over 10 ms, 6/300 over 30 ms |
+| Laptop ↔ server throughput over SSH (lower bound) | 122-168 Mbit/s direct; 42-54 over Tailscale |
+
+The stream was an idle Windows desktop, so its 4.1 Mbit/s and 35 fps say nothing about a game:
+Apollo only sends changed frames. Bitrate and frame pacing under a real game are **not measured yet**.
+
 ## Limitations
 
-- **Measured so far:** nothing end to end yet. The first boot cycle is pending; this section gets the
-  numbers (boot time, stream latency, bitrate) as they are measured.
-- **Moonlight pairing** needs a Moonlight client on the laptop; it is not installed there yet.
-- **Login:** nothing logs in to Windows automatically. Apollo streams the sign-in screen, so you type
-  the Windows password through Moonlight. Autologin would mean storing that password in the
-  registry, which this does not do.
+- **Game load is unmeasured.** The only measured stream is the Windows desktop (table above).
+- **Software decode on the laptop in the first bench.** Moonlight's VA-API init failed (-1) when launched
+  from a background user unit, although the Iris Xe has H.264/HEVC VA-API decode. The bench now forces
+  the Wayland backends and records `hardware_decode`; whether that fixes it is untested.
+- **No ICMP from Windows until the next boot:** Windows drops ping on the Public profile, so the first
+  bench has no ping-under-load numbers. `02-sshd` now adds a LAN-only rule.
+- **Login:** the Windows account here autologs in. On a machine with a password, Apollo streams the
+  sign-in screen and you type it through Moonlight; this does not store passwords.
 - **The laptop cannot be found by MAC** from the wired side (see the table above).
-- **Windows Update** is left alone. Windows had not booted for three months when this was built; the
-  first boots may spend a long time installing updates, and any restart may apply staged updates.
-  The deadlines above are sized for that, not for a quick boot.
+- **Windows Update** is left alone; any restart may apply staged updates and take longer.
 - **Stream detection is a heuristic** (log line or upload rate); see "Detecting a stream".
 - **Anyone at the Windows desktop** can restart it into Arch (`gamemoded arch` needs no elevation).
-  Anyone could also just press restart.
 - **The Defender exclusion** covers one file in a directory locked to SYSTEM and Administrators.
 - **pigion is a single point** for the remote paths (Discord `gaming off`, SSH rescue). If it is down,
   the service's own deadlines and the shortcut still work.
-- **Firmware Wake-on-LAN** from power-off also needs the BIOS setting; the Windows side only arms
-  the NIC.
+- **Firmware Wake-on-LAN** from power-off also needs the BIOS setting; the Windows side only arms the NIC.
+- **PowerShell traps:** a helper function named like a built-in alias (`H`, `Mp`) silently never runs,
+  because aliases win. `scripts/check-ps.ps1` (runs under pwsh on Linux) flags that and syntax errors;
+  run it on any new task.
