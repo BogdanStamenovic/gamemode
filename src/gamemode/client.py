@@ -185,11 +185,17 @@ def bench(cfg: Config, seconds: int, app: str, bitrate_kbps: int, resolution: st
         t.start()
         t.join()
         rx1, t1 = _rx_bytes(), time.time()
-        proc.send_signal(signal.SIGTERM)
+        # End the session from the host side so Moonlight closes normally and
+        # logs its "Global video stats"; SIGTERM only if that does not work.
+        subprocess.run(moonlight_cmd() + ["quit", ip], env=gui_env(), capture_output=True, timeout=60)
         try:
-            proc.wait(timeout=20)
+            proc.wait(timeout=30)
         except subprocess.TimeoutExpired:
-            proc.kill()
+            proc.send_signal(signal.SIGTERM)
+            try:
+                proc.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                proc.kill()
     text = logf.read_text(errors="replace")
     result = {
         "server": ip, "app": app, "resolution": resolution, "fps": fps,
