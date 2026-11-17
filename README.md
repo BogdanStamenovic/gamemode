@@ -190,7 +190,7 @@ From the first real cycles on 2026-11-16/17 (archserver: RTX 4060, wired 1 GbE; 
 | Moonlight average network latency (1080p60, Desktop) | 3 ms, variance 1 ms |
 | Frames dropped by the network / by jitter | 0.00% / 0.09% |
 | Host processing (capture + NVENC) avg / min / max | 3.7 / 1.9 / 224 ms (max during a Defender scan) |
-| Laptop decode / render time | 4.37 ms (software decode) / 1.53 ms |
+| Laptop decode / render time | 4.37 ms (software decode: no VA-API driver installed yet) / 1.53 ms |
 | LAN ping server → laptop, 300 pings, Wi-Fi power save off | avg 3.2 ms, max 9.8 ms, 0 over 10 ms |
 | Same with Wi-Fi power save on | avg 4.1 ms, 21/300 over 10 ms, 6/300 over 30 ms |
 | Laptop ↔ server throughput over SSH (lower bound) | 122-168 Mbit/s direct; 42-54 over Tailscale |
@@ -206,9 +206,11 @@ bitrate sample every 15 s (`gaming report` summarises it), so the next session g
 
 - **Game load is barely measured:** one bitrate sample from a 4-minute Minecraft session; no latency or
   frame stats under a game yet.
-- **Software decode on the laptop in the first bench.** Moonlight's VA-API init failed (-1) when launched
-  from a background user unit, although the Iris Xe has H.264/HEVC VA-API decode. The bench now forces
-  the Wayland backends and records `hardware_decode`; whether that fixes it is untested.
+- **Software decode on the laptop in the first session:** the laptop had no VA-API driver yet
+  (`intel-media-driver` was installed at 01:14, after the session ended at 01:12), so Moonlight warned and
+  decoded H.264 in software. With the driver it should decode HEVC on the Iris Xe; not yet measured.
+  The bench records `hardware_decode` so the next run shows it. Client requirement: `intel-media-driver`
+  (or the VA-API driver for the laptop's GPU).
 - **No ICMP from Windows until the next boot:** Windows drops ping on the Public profile, so the first
   bench has no ping-under-load numbers. `02-sshd` now adds a LAN-only rule.
 - **Login:** the Windows account here autologs in. On a machine with a password, Apollo streams the
