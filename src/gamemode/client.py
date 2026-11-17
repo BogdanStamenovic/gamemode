@@ -53,6 +53,11 @@ def gui_env() -> dict[str, str]:
         if k in ("WAYLAND_DISPLAY", "DISPLAY", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS",
                  "XDG_SESSION_TYPE", "XAUTHORITY") and k not in env:
             env[k] = v
+    # Under Wayland, Moonlight started from a background unit picked a path on
+    # which VA-API failed (-1) and fell back to software decode (2026-11-17).
+    if env.get("WAYLAND_DISPLAY"):
+        env.setdefault("SDL_VIDEODRIVER", "wayland")
+        env.setdefault("QT_QPA_PLATFORM", "wayland")
     return env
 
 
@@ -212,7 +217,10 @@ def bench(cfg: Config, seconds: int, app: str, bitrate_kbps: int, resolution: st
         "moonlight_stats": [ln for ln in text.splitlines()
                             if re.search(r"(?i)latency|frames dropped|bitrate|decod|fps|stats", ln)][-40:],
         "moonlight_rc": proc.returncode,
+        "hardware_decode": "Failed to initialize VAAPI" not in text and "VAAPI" in text,
     }
+    if not rtts:
+        result["rtt_note"] = "no ping replies: Windows firewall drops ICMP (needs the gamemode-icmp rule)"
     out = STATE_DIR / f"bench-{time.strftime('%Y%m%d-%H%M%S')}.json"
     out.write_text(json.dumps(result, indent=2))
     log(f"saved {out}")

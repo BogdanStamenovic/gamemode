@@ -17,8 +17,11 @@ $svc = Get-Service | Where-Object { $_.Name -match 'Apollo|Sunshine' }
 $svc | Stop-Service -Force -ErrorAction SilentlyContinue
 $conf = "$dir\config\sunshine.conf"
 New-Item -ItemType Directory -Force "$dir\config" | Out-Null
-$lines = @()
-if (Test-Path $conf) { $lines = Get-Content $conf | Where-Object { $_ -notmatch '^(sunshine_name|origin_web_ui_allowed|min_log_level)\s*=' } }
+# Typed array: with an empty file Get-Content yields $null, and `$null += 'x'`
+# makes a string, so the next += concatenated three settings onto one line
+# (Moonlight showed the host as "archserverorigin_web_ui_allowed = lan...").
+[string[]]$lines = @()
+if (Test-Path $conf) { $lines = @(Get-Content $conf | Where-Object { $_ -and $_ -notmatch '^(sunshine_name|origin_web_ui_allowed|min_log_level)\s*=|^archserver' }) }
 $lines += 'sunshine_name = archserver'
 $lines += 'origin_web_ui_allowed = lan'
 $lines += 'min_log_level = info'
