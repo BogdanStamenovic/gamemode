@@ -195,12 +195,17 @@ From the first real cycles on 2026-11-16/17 (archserver: RTX 4060, wired 1 GbE; 
 | Same with Wi-Fi power save on | avg 4.1 ms, 21/300 over 10 ms, 6/300 over 30 ms |
 | Laptop ↔ server throughput over SSH (lower bound) | 122-168 Mbit/s direct; 42-54 over Tailscale |
 
-The stream was an idle Windows desktop, so its 4.1 Mbit/s and 35 fps say nothing about a game:
-Apollo only sends changed frames. Bitrate and frame pacing under a real game are **not measured yet**.
+| His Minecraft session (00:08-00:12Z, ~4 min, Moonlight asked 20 Mbit/s, H.264) | 18.7 Mbit/s upload at the last heartbeat |
+
+The bench stream was an idle Windows desktop, so its 4.1 Mbit/s and 35 fps say nothing about a game
+(Apollo only sends changed frames). For the one game session there is a single bitrate sample and no
+Moonlight latency or frame stats: the Moonlight app he opened keeps no log. The service now records a
+bitrate sample every 15 s (`gaming report` summarises it), so the next session gets a curve.
 
 ## Limitations
 
-- **Game load is unmeasured.** The only measured stream is the Windows desktop (table above).
+- **Game load is barely measured:** one bitrate sample from a 4-minute Minecraft session; no latency or
+  frame stats under a game yet.
 - **Software decode on the laptop in the first bench.** Moonlight's VA-API init failed (-1) when launched
   from a background user unit, although the Iris Xe has H.264/HEVC VA-API decode. The bench now forces
   the Wayland backends and records `hardware_decode`; whether that fixes it is untested.
