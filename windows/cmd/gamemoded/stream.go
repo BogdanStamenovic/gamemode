@@ -3,7 +3,6 @@ package main
 import (
 	"io"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -33,27 +32,6 @@ func (m *uploadMeter) mbit() float64 {
 		return 0
 	}
 	return float64(sent-m.last) * 8 / 1e6 / now.Sub(m.lastT).Seconds()
-}
-
-// bytesSent parses `netstat -e`. The labels are localised, so it takes the
-// first line ending in two integers, which is the Bytes row in every locale.
-func bytesSent() (uint64, bool) {
-	out, err := runCmd(10*time.Second, "netstat", "-e")
-	if err != nil {
-		return 0, false
-	}
-	for _, line := range strings.Split(out, "\n") {
-		f := strings.Fields(line)
-		if len(f) < 3 {
-			continue
-		}
-		_, e1 := strconv.ParseUint(f[len(f)-2], 10, 64)
-		s, e2 := strconv.ParseUint(f[len(f)-1], 10, 64)
-		if e1 == nil && e2 == nil {
-			return s, true
-		}
-	}
-	return 0, false
 }
 
 func apolloLogState(path string) (connected bool, fresh bool) {

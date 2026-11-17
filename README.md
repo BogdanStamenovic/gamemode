@@ -54,7 +54,8 @@ Windows booted by hand (no `mode.json`) is left alone: the service heartbeats an
 ### Detecting a stream
 
 Two signals, either one counts: Apollo's log saying `CLIENT CONNECTED` more recently than
-`CLIENT DISCONNECTED` (and written in the last 10 min), or upload above 4 Mbit/s (`netstat -e`).
+`CLIENT DISCONNECTED` (and written in the last 10 min), or upload above 4 Mbit/s on the physical NICs (64-bit `GetIfTable2` counters; `netstat -e` over-counted
+6x and wrapped every ~2 min at stream rates, see Measured).
 A false "streaming" only delays the wind-down; a false "idle" would cut off a game, so it leans
 towards streaming. Windows Update or a Steam upload can keep the box up longer than it should.
 
@@ -195,7 +196,26 @@ From the first real cycles on 2026-11-16/17 (archserver: RTX 4060, wired 1 GbE; 
 | Same with Wi-Fi power save on | avg 4.1 ms, 21/300 over 10 ms, 6/300 over 30 ms |
 | Laptop ↔ server throughput over SSH (lower bound) | 122-168 Mbit/s direct; 42-54 over Tailscale |
 
-| His Minecraft session (00:08-00:12Z, ~4 min, Moonlight asked 20 Mbit/s, H.264) | 18.7 Mbit/s upload at the last heartbeat |
+| First Minecraft session (00:08-00:12Z 11-17, ~4 min, 20 Mbit/s, H.264, software decode) | 18.7 Mbit/s at the last heartbeat |
+
+**Long session, 2026-11-17 21:05-23:24Z (~139 min), 2560x1440 @ 120 fps requested, 80 Mbit/s cap,
+HEVC, hardware decode (VA-API, Iris Xe).** Moonlight's own stats for the last 55.7 min:
+
+| What | Number |
+|---|---|
+| Average network latency | 3 ms, variance 0 ms |
+| Frames received / decoded / rendered | 107.9 / 107.9 / 107.9 fps (of 120) |
+| Frames dropped by network / by jitter | 0.09% / 0.04% |
+| Host capture + encode avg / min / max | 3.3 / 0.5 / 14.7 ms |
+| Laptop decode / render / frame queue | 0.23 / 1.52 / 0.08 ms |
+| Unrecoverable frames (whole log, ~60 min) | 83, clustered: up to 9 in one minute, mostly 0-3 |
+| Audio packet losses | 165 events of 2-8 packets |
+| Bitrate actually sent (Windows SRUM, sunshine.exe on Ethernet) | 45.9 GB over ~126 min ≈ 49 Mbit/s average |
+| Laptop Wi-Fi at the time | -70 dBm, 5240 MHz, rx link 576 Mbit/s, tx 288 |
+
+The losses are Wi-Fi bursts: latency stayed at 3 ms and host processing never passed 14.7 ms.
+gamemoded's own upload counter (then `netstat -e`) reported ~300 Mbit/s median for this session, six
+times the SRUM figure; it reads 64-bit physical-NIC counters now.
 
 The bench stream was an idle Windows desktop, so its 4.1 Mbit/s and 35 fps say nothing about a game
 (Apollo only sends changed frames). For the one game session there is a single bitrate sample and no
@@ -204,13 +224,11 @@ bitrate sample every 15 s (`gaming report` summarises it), so the next session g
 
 ## Limitations
 
-- **Game load is barely measured:** one bitrate sample from a 4-minute Minecraft session; no latency or
-  frame stats under a game yet.
-- **Software decode on the laptop in the first session:** the laptop had no VA-API driver yet
-  (`intel-media-driver` was installed at 01:14, after the session ended at 01:12), so Moonlight warned and
-  decoded H.264 in software. With the driver it should decode HEVC on the Iris Xe; not yet measured.
-  The bench records `hardware_decode` so the next run shows it. Client requirement: `intel-media-driver`
-  (or the VA-API driver for the laptop's GPU).
+- **Stats depend on how Moonlight was started:** Moonlight logs to its stdout; launched from the GNOME
+  menu that lands in the user journal, launched any other way it may be lost (the first 50-min run of the
+  long session has no stats for that reason).
+- **Client needs a VA-API driver:** without `intel-media-driver` (Iris Xe) Moonlight decodes in software
+  (4.37 ms vs 0.23 ms per frame measured) and falls back to H.264.
 - **No ICMP from Windows until the next boot:** Windows drops ping on the Public profile, so the first
   bench has no ping-under-load numbers. `02-sshd` now adds a LAN-only rule.
 - **Login:** the Windows account here autologs in. On a machine with a password, Apollo streams the
