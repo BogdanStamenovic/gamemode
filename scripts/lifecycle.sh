@@ -29,7 +29,26 @@ if [ "$role" = client ]; then
       echo "archserver not reachable: copy ~/.config/gamemode/secrets.json from it before 'gaming pair'" >&2
     fi
   fi
-  [ "$action" = remove ] && echo "kept ~/.config/gamemode (credentials)" >&2
+  if [ "$action" != remove ]; then
+    # Send Super, F-keys, Alt+Tab etc. to Windows while streaming (Moonlight's
+    # "capture system keyboard shortcuts: always"), and pre-grant GNOME's
+    # shortcuts-inhibit permission so Mutter does not stop to ask. Only set when
+    # absent, so a later choice in Moonlight's settings wins.
+    conf="$HOME/.config/Moonlight Game Streaming Project/Moonlight.conf"
+    if [ -f "$conf" ] && ! grep -q '^capturesyskeys=' "$conf"; then
+      if pgrep -x moonlight >/dev/null; then
+        echo "Moonlight is running; not touching its config (it rewrites it on exit)" >&2
+      else
+        sed -i '0,/^\[General\]$/s//[General]\ncapturesyskeys=2/' "$conf" && echo "Moonlight: capture system keys = always" >&2
+      fi
+    fi
+    if command -v flatpak >/dev/null; then
+      for id in com.moonlight_stream.Moonlight moonlight; do
+        flatpak permission-set gnome shortcuts-inhibitor "$id" GRANTED 2>/dev/null || true
+      done
+    fi
+  fi
+  [ "$action" = remove ] && echo "kept ~/.config/gamemode (credentials) and Moonlight's settings" >&2
   exit 0
 fi
 
