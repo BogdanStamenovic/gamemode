@@ -74,17 +74,43 @@ def blockers(self_name: str | None) -> list[Blocker]:
     return found
 
 
+def _never_sleep_file() -> Path:
+    # Same resolution as hotline's config.state_dir().
+    env = os.environ.get("HOTLINE_STATE")
+    if env:
+        return Path(env) / "never-sleep.json"
+    xdg = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
+    return Path(xdg) / "hotline" / "never-sleep.json"
+
+
+def never_sleep() -> set[str]:
+    try:
+        return set(json.loads(_never_sleep_file().read_text()))
+    except (OSError, ValueError):
+        return set()
+
+
 def sleep_agents(self_name: str | None, log: Callable[[str], None]) -> None:
     """Put idle hotline agents to sleep so they resume cleanly after the switch.
+
+    `hotline --sleep NAME now` also takes NAME off the never-sleep list (that is
+    his Discord command's meaning, hotline 509cc2a). On 2026-11-17 that left
+    four never-sleep agents dead after the boot, because keepalive only revives
+    listed ones. So membership is restored with `--sleep NAME never` right
+    after: the box reboots anyway, and keepalive reviving them is the point.
+    One call per agent: --sleep takes a single NAME [never|now].
     The operator is exempt from sleep and is respawned by hotline's watchdog."""
     names = [n for n, s in agents() if s == "idle" and n != self_name and not n.startswith("hotline-")]
-    if not names:
-        return
-    # One call per agent: `hotline --sleep` takes a single NAME [never|now]
-    # (passing five at once returned rc=2 and slept nobody, 2026-11-17).
+    keep = never_sleep()
     for n in names:
         r = _run(["hotline", "--sleep", n, "now"], timeout=60)
         log(f"hotline --sleep {n} now: rc={r.returncode} {r.stderr.strip()[:200]}")
+        if n in keep:
+            r = _run(["hotline", "--sleep", n, "never"], timeout=60)
+            log(f"hotline --sleep {n} never (restored): rc={r.returncode} {r.stderr.strip()[:200]}")
+    lost = keep - never_sleep()
+    if lost:
+        log(f"warning: never-sleep lost {sorted(lost)}; keepalive will not revive them")
 
 
 def write_mode(cfg: Config, mode: str, deadline: int | None = None) -> None:
