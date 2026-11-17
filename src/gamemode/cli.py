@@ -199,6 +199,11 @@ def cmd_report(cfg: config.Config, a: argparse.Namespace, log) -> int:
         tr = json.loads(t.read_text())
         flag = "TIMEOUT" if tr.get("timed_out") else f"exit {tr.get('exit_code')}"
         print(f"  {tr['name']:<16} {flag:<8} {tr.get('seconds', 0):6.0f}s  {tr.get('finished')}")
+    samples = [x for x in r.get("samples") or [] if x.get("streaming")]
+    if samples:
+        mb = sorted(x["mbit"] for x in samples)
+        print(f"  streaming: {len(samples) * 15 // 60} min sampled, upload avg {sum(mb) / len(mb):.1f} / "
+              f"median {mb[len(mb) // 2]:.1f} / max {mb[-1]:.1f} Mbit/s")
     for e in r.get("events", [])[-15:]:
         print(f"  | {e}")
     return 0

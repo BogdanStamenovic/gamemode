@@ -63,6 +63,12 @@ type TaskResult struct {
 	Finished string  `json:"finished"`
 }
 
+type Sample struct {
+	T         string  `json:"t"`
+	Mbit      float64 `json:"mbit"`
+	Streaming bool    `json:"streaming"`
+}
+
 type State struct {
 	mu            sync.Mutex
 	Version       string       `json:"version"`
@@ -79,7 +85,10 @@ type State struct {
 	RelayError    string       `json:"relay_error,omitempty"`
 	RelayURL      string       `json:"relay_url,omitempty"`
 	RestartReason string       `json:"restart_reason,omitempty"`
-	Events        []string     `json:"events"`
+	// One sample per tick (15 s), so a whole play session has a bitrate curve.
+	// 2880 samples = 12 h; older ones are dropped.
+	Samples []Sample `json:"samples,omitempty"`
+	Events  []string `json:"events"`
 }
 
 var st = &State{}
@@ -194,6 +203,10 @@ func daemon(ctx context.Context) {
 			streaming, reason, mbit := detectStream(cfg, meter)
 			st.mu.Lock()
 			st.Streaming, st.StreamReason, st.UploadMbit = streaming, reason, mbit
+			st.Samples = append(st.Samples, Sample{time.Now().UTC().Format("15:04:05"), float64(int(mbit*10)) / 10, streaming})
+			if len(st.Samples) > 2880 {
+				st.Samples = st.Samples[len(st.Samples)-2880:]
+			}
 			if streaming {
 				st.LastStream = time.Now()
 			}
@@ -310,7 +323,9 @@ func heartbeat(cfg Config) string {
 	if base == "" {
 		return ""
 	}
-	body, _ := json.Marshal(snapshot())
+	snap := snapshot()
+	delete(snap, "samples") // the report keeps the curve; the Pi only needs the latest values
+	body, _ := json.Marshal(snap)
 	req, _ := http.NewRequest("POST", strings.TrimRight(base, "/")+"/heartbeat", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+cfg.RelayToken)
