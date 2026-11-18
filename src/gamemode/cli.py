@@ -113,6 +113,13 @@ def cmd_on(cfg: config.Config, a: argparse.Namespace, log) -> int:
     if problems:
         log("refusing: " + "; ".join(problems))
         return 1
+    # Every switch re-checks the offline registry edits (service, Fast Startup off,
+    # OLLAMA_NOPRUNE...), so one added to winprep after the last prepare, or one
+    # Windows itself reverted, is caught before the boot instead of after.
+    missing = [f"{n}\\{v.key}\\{v.name}" for n, vs in winprep.registry_state(cfg)[1].items() for v in vs]
+    if missing:
+        log("refusing: Windows registry lacks " + ", ".join(missing) + "; run `gaming prepare`")
+        return 1
     blockers = boot.blockers(_self_agent())
     for b in blockers:
         log(f"busy: {b.what}: {b.detail}")

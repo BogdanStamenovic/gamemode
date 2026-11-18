@@ -66,7 +66,12 @@ Linux, through `/mnt/windows`:
 
 - **SYSTEM hive:** adds the `gamemoded` service (auto start, LocalSystem, restart on failure),
   sets `HiberbootEnabled=0`, adds a firewall rule letting sshd answer the LAN on every profile (the
-  stock rule is Private-only, and the wired network may be classed Public).
+  stock rule is Private-only, and the wired network may be classed Public). It also sets
+  `OLLAMA_NOPRUNE=1` machine-wide: Linux ollama keeps its models in `C:\Users\Korisnik\.ollama`, the
+  same folder the Windows ollama app uses, and the Windows app starts at every logon and prunes
+  "unused" blobs. On 2026-11-17 an old Windows build (0.32.15) did that to a model written by Linux
+  0.40.16 and deleted 3 blobs, all of `cyber-ornith:9b`. `gaming on` refuses to switch while any of
+  these values is missing.
 - **SOFTWARE hive:** a Defender exclusion for exactly `C:\gamemode\bin\gamemoded.exe`. An unsigned Go
   binary running as SYSTEM is what heuristics quarantine, and a quarantined service means Windows
   never restarts on its own.

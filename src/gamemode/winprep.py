@@ -106,6 +106,15 @@ def registry_values(cfg: Config, ccs: str) -> dict[str, list[Value]]:
         # 2026-11-16: journal started at 22:45 for 23:45 CET until NTP caught up).
         Value(f"{ccs}\\Control\\TimeZoneInformation", "RealTimeIsUniversal",
               hive.REG_QWORD, hive.qword(1)),
+        # The Linux ollama keeps its models in C:\Users\Korisnik\.ollama\models,
+        # the same directory the Windows ollama app (Startup folder, every logon)
+        # uses. On its startup ollama deletes blobs no manifest references, and a
+        # build that cannot read a manifest written by a newer one counts that
+        # model's blobs as orphans: on 2026-11-17 01:03 CET Windows ollama 0.32.15
+        # logged "total unused blobs removed: 3" and cyber-ornith:9b was gone.
+        # Machine-wide, so it covers every user, every ollama version and reinstalls.
+        Value(f"{ccs}\\Control\\Session Manager\\Environment", "OLLAMA_NOPRUNE",
+              REG_SZ, sz("1")),
     ]
     # A Defender path exclusion for the service binary only: an unsigned Go
     # binary running as SYSTEM is exactly what heuristics like to quarantine,
@@ -217,18 +226,23 @@ def plant_files(cfg: Config, log: Callable[[str], None], reset_tasks: list[str])
     }, indent=2))
 
 
-def prepare(cfg: Config, log: Callable[[str], None], dry_run: bool = False,
-            rerun: list[str] | None = None) -> None:
-    problems = preflight(cfg)
-    if problems:
-        raise PrepError("; ".join(problems))
-    sysh = hives(cfg)["SYSTEM"]
-    ccs = hive.current_control_set(sysh)
+def registry_state(cfg: Config) -> tuple[dict[str, list[Value]], dict[str, list[Value]]]:
+    """(wanted values, the ones the hives do not hold yet)."""
+    ccs = hive.current_control_set(hives(cfg)["SYSTEM"])
     vals = registry_values(cfg, ccs)
     pending = {
         name: [v for v in vs if hive.read_value(hives(cfg)[name], v.key, v.name) != (v.type, v.data)]
         for name, vs in vals.items()
     }
+    return vals, pending
+
+
+def prepare(cfg: Config, log: Callable[[str], None], dry_run: bool = False,
+            rerun: list[str] | None = None) -> None:
+    problems = preflight(cfg)
+    if problems:
+        raise PrepError("; ".join(problems))
+    vals, pending = registry_state(cfg)
     for name, vs in pending.items():
         for v in vs:
             log(f"{'would set' if dry_run else 'set'} {name}\\{v.key} : {v.name} = {hive._show(v)}")
