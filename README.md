@@ -43,7 +43,7 @@ Arch because GRUB is first in BootOrder. Before restarting, the service also set
 | "Back to Arch" shortcut / Ctrl+Alt+End / `gamemoded arch` | service, local |
 | prep mode: task queue finished, or `prep_minutes` passed (30) | service |
 | no heartbeat 10 min after arming, or heartbeats stop for 5 min | relay, over SSH |
-| two SSH rescues failed | relay DMs you: press reset, it lands in Arch |
+| two SSH rescues failed | relay DMs you: press reset (lands in Arch); if GRUB errors, F11 → Windows Boot Manager |
 
 Back in Arch, `gamemode-boot.service` disarms the relay (which DMs you how long the session was and
 why it ended) and copies `C:\gamemode\reports` to `~/.local/state/gamemode/sessions/<time>/`.
@@ -172,12 +172,13 @@ Config: `~/.config/gamemode/config.toml` (created on first run), secrets in
 | `gaming on` | Switch to Windows for streaming (refuses when busy; `--force`, `--dry-run`, `--no-reboot`). |
 | `gaming on --prep [--deadline MIN]` | Boot Windows only to run the task queue, then come back. |
 | `gaming off` | Ask Windows, via the relay, to restart into Arch. |
-| `gaming status` | Firmware boot state, relay state, last Windows report, as JSON. |
+| `gaming status` | Firmware boot state, GRUB check, relay state, last Windows report, as JSON. |
 | `gaming report [TASK]` | Summary of the last Windows boot, or one task's full output. |
 | `gaming prepare [--dry-run] [--rerun TASK]` | Offline Windows prep (idempotent). |
 | `gaming unprepare [--yes]` | Take the service, rule, exclusion, keys and `C:\gamemode` back out. |
 | `gaming relay-deploy [--remove]` | Install/update the relay on pigion. |
 | `gaming boot-hook` | What the boot unit runs. |
+| `gaming grub [check\|install] [--dry-run]` | Check that `EFI/GRUB/grubx64.efi` reaches `/boot/grub` (exit 0 only if by UUID); `install` rebuilds it with a UUID search, keeps the old one beside it, never touches NVRAM. |
 | `gaming pair [--wait S]` | (laptop) Pair Moonlight with Apollo: Moonlight's `--pin` plus Apollo's `/api/pin`, no typing. |
 | `gaming bench [--seconds N] [--wait S]` | (laptop) Stream N s and record Moonlight's stats, ping under load and received bitrate. |
 
@@ -239,7 +240,21 @@ bitrate sample every 15 s (`gaming report` summarises it), so the next session g
 - **Login:** the Windows account here autologs in. On a machine with a password, Apollo streams the
   sign-in screen and you type it through Moonlight; this does not store passwords.
 - **The laptop cannot be found by MAC** from the wired side (see the table above).
-- **Windows Update** is left alone; any restart may apply staged updates and take longer.
+- **Windows Update restarted a session once** (2026-11-18, KB5132061, event 1074 "Upgrade
+  (Planned)", 2 min after boot) and added a recovery partition ahead of Arch's root, which moved root
+  from p4 to p5. Since then `prepare` sets the AU policy (`AUOptions=3`: download, install only when
+  someone clicks Install; `NoAutoRebootWithLoggedOnUsers=1`) and pins the feature release to 25H2
+  (`TargetReleaseVersion`). The edition is Pro, which honours these. What it does **not** stop: an
+  update someone installs by hand still restarts when it wants; Defender definitions keep updating;
+  security updates pile up uninstalled until somebody installs them, on a machine with a malware
+  history. Untested so far: no Windows boot has run with the policy yet.
+- **GRUB and partition numbers:** a plain `grub-install` bakes in a prefix like `(,gpt4)/boot/grub`.
+  That image went dark on 2026-11-18 (42 min, `grub rescue>`) when Windows renumbered the disk. The
+  installed image now finds root by filesystem UUID (`gaming grub install`; tested in QEMU+OVMF on copies
+  of this disk with root at p4 and p5: the old image boots only p4, the byte-patched one only p5, the
+  UUID one both). Nothing stops someone running `grub-install` again; `gaming on` refuses when the
+  image cannot reach root, `gaming status` and the boot hook log the check, and a pacman hook re-checks
+  after every grub upgrade. After any `grub-install`, run `gaming grub install`.
 - **Stream detection is a heuristic** (log line or upload rate); see "Detecting a stream".
 - **Anyone at the Windows desktop** can restart it into Arch (`gamemoded arch` needs no elevation).
 - **The Defender exclusion** covers one file in a directory locked to SYSTEM and Administrators.

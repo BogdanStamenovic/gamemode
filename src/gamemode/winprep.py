@@ -119,7 +119,23 @@ def registry_values(cfg: Config, ccs: str) -> dict[str, list[Value]]:
     # A Defender path exclusion for the service binary only: an unsigned Go
     # binary running as SYSTEM is exactly what heuristics like to quarantine,
     # and a quarantined service means Windows never restarts by itself.
+    # Windows Update: on 2026-11-18 an update restarted the box 2 min into a gaming
+    # session (event 1074 "Upgrade (Planned)", KB5132061) and also added a recovery
+    # partition ahead of Arch's root. Edition is Pro (EditionID=Professional), which
+    # honours these policies. AUOptions=3: download automatically, install only when
+    # someone clicks Install, so no unattended install means no unattended restart.
+    # NoAutoRebootWithLoggedOnUsers only matters if AUOptions is later set to 4.
+    # TargetReleaseVersion pins the feature release (25H2) so no feature upgrade
+    # rewrites the disk layout behind our back. Security updates still download;
+    # they wait for a human (or a future prep task) to install them.
+    wu = "Policies\\Microsoft\\Windows\\WindowsUpdate"
     software = [
+        Value(f"{wu}\\AU", "NoAutoUpdate", REG_DWORD, dword(0)),
+        Value(f"{wu}\\AU", "AUOptions", REG_DWORD, dword(3)),
+        Value(f"{wu}\\AU", "NoAutoRebootWithLoggedOnUsers", REG_DWORD, dword(1)),
+        Value(wu, "TargetReleaseVersion", REG_DWORD, dword(1)),
+        Value(wu, "ProductVersion", REG_SZ, sz("Windows 11")),
+        Value(wu, "TargetReleaseVersionInfo", REG_SZ, sz("25H2")),
         Value("Policies\\Microsoft\\Windows Defender\\Exclusions", "Exclusions_Paths",
               REG_DWORD, dword(1)),
         Value("Policies\\Microsoft\\Windows Defender\\Exclusions\\Paths",

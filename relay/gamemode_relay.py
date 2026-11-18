@@ -259,7 +259,11 @@ def watchdog() -> None:
         if len(rescues) >= 2:
             if not s.get("alerted"):
                 say(f"gamemode needs a hand: archserver has not come back to Arch ({reason}), "
-                    f"and {len(rescues)} SSH restarts did not fix it. A reset button press lands in Arch.")
+                    f"and {len(rescues)} SSH restarts did not fix it. Press reset: that normally lands in "
+                    "Arch. If the screen then shows a GRUB error or 'grub rescue>', GRUB cannot find "
+                    "Arch: press reset again, tap F11 for the ASRock boot menu and pick 'Windows Boot "
+                    "Manager'. Windows is reachable over SSH from there, and `gaming grub install` "
+                    "fixes GRUB once Arch is back.")
                 with lock:
                     state["alerted"] = True
                     save(state)

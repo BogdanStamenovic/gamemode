@@ -19,7 +19,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import NoReturn
 
-from . import __version__, boot, config, relay, winprep
+from . import __version__, boot, config, grubimg, relay, winprep
 from .hive import HiveError
 
 
@@ -73,6 +73,9 @@ def _build_parser() -> argparse.ArgumentParser:
     be.add_argument("--fps", type=int, default=60)
     be.add_argument("--wait", type=int, default=0, help="seconds to wait for archserver to appear")
     sub.add_parser("boot-hook", help="run at Linux boot: disarm relay, archive reports")
+    gr = sub.add_parser("grub", help="check (or rebuild) the GRUB image so it finds root by UUID")
+    gr.add_argument("action", choices=["check", "install"], nargs="?", default="check")
+    gr.add_argument("--dry-run", action="store_true", help="install: build and check, do not copy")
     rd = sub.add_parser("relay-deploy", help="install or update the relay on pigion")
     rd.add_argument("--remove", action="store_true", help="uninstall it instead")
     return p
@@ -93,7 +96,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     cfg = config.load()
     try:
         return int(COMMANDS[args.cmd](cfg, args, log))
-    except (winprep.PrepError, HiveError, relay.RelayError, RuntimeError) as exc:
+    except (winprep.PrepError, HiveError, relay.RelayError, grubimg.GrubImageError, RuntimeError) as exc:
         print(f"gaming: error: {exc}", file=sys.stderr)
         return 1
 
@@ -120,6 +123,15 @@ def cmd_on(cfg: config.Config, a: argparse.Namespace, log) -> int:
     if missing:
         log("refusing: Windows registry lacks " + ", ".join(missing) + "; run `gaming prepare`")
         return 1
+    # GRUB must come back: Windows is reached by a one-shot BootNext and everything
+    # after (idle wind-down, 'gaming off', the hard deadline) ends in a reboot that
+    # needs GRUB to find /boot/grub. On 2026-11-18 it did not, and the box was dark
+    # for 42 minutes. --force does not override this.
+    ok, why = grubimg.check_esp()
+    if not ok:
+        log(f"refusing: GRUB would not get back to Arch: {why}; run `gaming grub install`")
+        return 1
+    log(f"grub: {why}")
     blockers = boot.blockers(_self_agent())
     for b in blockers:
         log(f"busy: {b.what}: {b.detail}")
@@ -172,6 +184,8 @@ def _report_dir(cfg: config.Config) -> Path:
 
 def cmd_status(cfg: config.Config, a: argparse.Namespace, log) -> int:
     out: dict[str, object] = {"efi": boot.efi_state()}
+    ok, why = grubimg.check_esp()
+    out["grub"] = {"ok": ok, "detail": why}
     try:
         out["relay"] = relay.call(cfg, "GET", "/status")
     except relay.RelayError as exc:
@@ -260,6 +274,8 @@ def cmd_bench(cfg: config.Config, a: argparse.Namespace, log) -> int:
 def cmd_boot_hook(cfg: config.Config, a: argparse.Namespace, log) -> int:
     """Back in Arch: disarm the relay and keep a copy of what Windows reported."""
     boot.clear_bootnext()
+    ok, why = grubimg.check_esp()
+    log(f"grub: {'ok' if ok else 'WILL NOT BOOT ARCH'}: {why}")
     # Retry: on 2026-11-17 the unit ran at boot before the LAN answered (even after
     # network-online.target) and left the relay armed. 18 x 10 s covers a slow DHCP.
     session = None
@@ -290,6 +306,16 @@ def cmd_boot_hook(cfg: config.Config, a: argparse.Namespace, log) -> int:
             (dest / "relay-session.json").write_text(json.dumps(session, indent=2))
         log(f"archived Windows reports to {dest}")
     return 0
+
+
+def cmd_grub(cfg: config.Config, a: argparse.Namespace, log) -> int:
+    if a.action == "install":
+        return grubimg.install(log, dry_run=a.dry_run)
+    ok, why = grubimg.check_esp()
+    print(json.dumps({"image": str(grubimg.ESP_IMAGE), "ok": ok, "detail": why,
+                      "by_uuid": ok and "UUID" in why}, indent=2))
+    # 0 only when it survives renumbering; 1 when it is broken or only works by partition number.
+    return 0 if ok and "UUID" in why else 1
 
 
 RELAY_UNIT = """[Unit]
@@ -350,6 +376,6 @@ systemctl --user is-active gamemode-relay.service
 
 COMMANDS = {
     "on": cmd_on, "off": cmd_off, "status": cmd_status, "report": cmd_report,
-    "prepare": cmd_prepare, "unprepare": cmd_unprepare, "boot-hook": cmd_boot_hook,
+    "prepare": cmd_prepare, "unprepare": cmd_unprepare, "boot-hook": cmd_boot_hook, "grub": cmd_grub,
     "pair": cmd_pair, "bench": cmd_bench, "relay-deploy": cmd_relay_deploy,
 }

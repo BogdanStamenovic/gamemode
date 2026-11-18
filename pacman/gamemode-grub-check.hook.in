@@ -1,0 +1,13 @@
+# Installed by gamemode (scripts/install-unit.sh). Checks after every grub
+# upgrade that EFI/GRUB/grubx64.efi still finds root (by UUID) and warns if
+# /boot/grub needs a grub-install. Never rebuilds or installs anything itself.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = grub
+
+[Action]
+Description = gamemode: checking that GRUB can still find Arch's root...
+When = PostTransaction
+Exec = /bin/sh -c 'PYTHONPATH=@TOOL@/src /usr/bin/python3 -c "from gamemode.grubimg import main; main()" || true'
